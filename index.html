@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Firebase Authentication</title>
+    <script src="https://unpkg.com/vue"></script>
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import {initializeApp} from "https://www.gstatic.com/firebasejs/9.0.1/firebase-app.js";
+        import {
+            getDatabase,
+            ref,
+            child,
+            update,
+            onValue
+        } from "https://www.gstatic.com/firebasejs/9.0.1/firebase-database.js";
+
+        import {
+            getAuth,
+            createUserWithEmailAndPassword,
+            onAuthStateChanged,
+            signOut,
+            signInWithEmailAndPassword,
+            GoogleAuthProvider,
+            signInWithPopup,
+            updateProfile,
+            updateEmail,
+            updatePassword,
+            linkWithPopup,
+            unlink
+        } from "https://www.gstatic.com/firebasejs/9.0.1/firebase-auth.js";
+
+        // TODO: Add SDKs for Firebase products that you want to use
+        // https://firebase.google.com/docs/web/setup#available-libraries
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAe5SxaaToLq_V9iztId8-43551689Y4Is",
+            authDomain: "vueschool-firebase-auth-4ad4b.firebaseapp.com",
+            projectId: "vueschool-firebase-auth-4ad4b",
+            databaseURL: "https://vueschool-firebase-auth-4ad4b-default-rtdb.firebaseio.com/",
+            storageBucket: "vueschool-firebase-auth-4ad4b.appspot.com",
+            messagingSenderId: "427872897178",
+            appId: "1:427872897178:web:4746211ad84f41f6117723"
+        };
+        // Initialize Firebase
+        initializeApp(firebaseConfig);
+        const auth = getAuth()
+        new Vue({
+            el: '#app',
+
+            data: {
+                email: '',
+                password: '',
+                displayName: null,
+                photoURL: null,
+                newPassword: null,
+                favoriteFood: null,
+                authUser: null
+            },
+
+            computed: {
+                linkedGoogle() {
+                    return !!this.authUser.providerData.find(provider => provider.providerId === 'google.com')
+                },
+
+                linkedPassword() {
+                    return !!this.authUser.providerData.find(provider => provider.providerId === 'password')
+                }
+            },
+
+            methods: {
+                register() {
+                    createUserWithEmailAndPassword(auth, this.email, this.password)
+                        .catch(error => alert(`🤔 ${error.message}`))
+                },
+
+                signOut() {
+                    signOut(auth)
+                },
+
+                signIn() {
+                    signInWithEmailAndPassword(auth, this.email, this.password)
+                        .catch(error => alert(`🤔 ${error.message}`))
+                },
+
+                signInWithGoogle() {
+                    const provider = new GoogleAuthProvider()
+                    signInWithPopup(auth, provider)
+                        .catch(error => alert(`🤔 ${error.message}`))
+                        .then(data => {
+                            const credential = GoogleAuthProvider.credentialFromResult(data)
+                            console.log(data.user, credential.accessToken)
+                        })
+                },
+
+                linkGoogle() {
+                    const provider = new GoogleAuthProvider()
+                    linkWithPopup(this.authUser, provider)
+                        .catch(error => alert(`🤔 ${error.message}`))
+                        .then(data => {
+                            const credential = GoogleAuthProvider.credentialFromResult(data)
+                            console.log(data.user, credential.accessToken)
+                        })
+                },
+
+                unlinkGoogle() {
+                    unlink(this.authUser, 'google.com')
+                },
+
+                updateProfile() {
+                    updateProfile(this.authUser, {
+                        displayName: this.displayName,
+                        photoURL: this.photoURL
+                    })
+                },
+
+                updateCustomDetails() {
+                    update(child(ref(getDatabase(), 'users'), this.authUser.uid), {favoriteFood: this.favoriteFood})
+                },
+
+                updateEmail() {
+                    updateEmail(this.authUser, this.email)
+                },
+
+                updatePassword() {
+                    updatePassword(this.authUser, this.newPassword)
+                        .then(() => this.newPassword = null)
+                        .catch(error => alert(`🤔 ${error.message}`))
+                }
+            },
+
+            created() {
+                onAuthStateChanged(auth, user => {
+                    this.authUser = user
+                    if (user) {
+                        this.displayName = user.displayName
+                        this.photoURL = user.photoURL
+                        this.email = user.email
+                        onValue(child(ref(getDatabase(), 'users'), user.uid), snapshot => {
+                            if (snapshot.val()) {
+                                this.favoriteFood = snapshot.val().favoriteFood
+                                Vue.set(this.authUser, 'favoriteFood', this.favoriteFood)
+                            }
+                        }, {
+                            onlyOnce: true
+                        })
+                    }
+                })
+            }
+        })
+    </script>
+
+</head>
+<body>
+
+<div id="app">
+    <h1>Vue School - Firebase Authentication</h1>
+    <div v-if="authUser">
+        <h2>Signed in as {{ authUser.email }}
+            <img v-if="linkedGoogle" src="https://www.gstatic.com/mobilesdk/160512_mobilesdk/auth_service_google.svg"
+                 alt="">
+            <img v-if="linkedPassword"
+                 src="https://www.gstatic.com/mobilesdk/160409_mobilesdk/images/auth_service_email.svg" alt="">
+        </h2>
+        <img :src="authUser.photoURL" height="150">
+        <p>😋, {{ authUser.displayName || 'friend' }} we know you like {{ authUser.favoriteFood || 'food' }}.</p>
+        <button @click="signOut">Sign out</button>
+        <button v-if="!linkedGoogle" @click="linkGoogle">Link Google Account</button>
+        <button v-else @click="unlinkGoogle">Unlink Google Account</button>
+
+        <form @submit.prevent="updateProfile">
+            <h2>Update Profile</h2>
+            <input v-model="displayName" placeholder="Your name">
+            <input v-model="photoURL" placeholder="Your photo url">
+            <button>Update</button>
+        </form>
+
+        <form @submit.prevent="updateCustomDetails">
+            <h2>Update Additional Details</h2>
+            <input v-model="favoriteFood" placeholder="Your favorite food">
+            <button>Update</button>
+        </form>
+
+        <form @submit.prevent="updateEmail">
+            <h2>Update Email</h2>
+            <input v-model="email" placeholder="Your email">
+            <button>Update</button>
+        </form>
+
+        <form @submit.prevent="updatePassword">
+            <h2>Update Password</h2>
+            <input type="password" v-model="newPassword" placeholder="Your password">
+            <button>Update</button>
+        </form>
+    </div>
+    <div v-else>
+        <form @submit.prevent="register">
+            <h2>Register</h2>
+            <input type="email" v-model="email" placeholder="Type your email">
+            <input type="password" v-model="password" placeholder="Pick your password">
+            <button>Register</button>
+        </form>
+
+        <form @submit.prevent="signIn">
+            <h2>Sign in</h2>
+            <input type="email" v-model="email" placeholder="Type your email">
+            <input type="password" v-model="password" placeholder="Type your password">
+            <button>Sign in</button>
+        </form>
+
+        <div>
+            <h2>Sign in with Google</h2>
+            <button @click="signInWithGoogle">Sign in</button>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
